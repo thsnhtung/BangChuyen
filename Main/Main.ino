@@ -1,7 +1,7 @@
-#include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <Keypad.h>
 
+#define DEFAULT_VALUE 25
 LiquidCrystal_I2C lcd(0x20, 16, 2);
 const byte rows = 4; // numberOfRow
 const byte columns = 4; //numberOfColumn
@@ -14,6 +14,10 @@ char keys[rows][columns] =
   {'7', '8', '9', 'C'},
   {'*', '0', '#', 'D'},
 };
+
+
+char buffer[160] ;
+volatile int buffer_point = 0 ;
 
 
 byte rowPins[rows] = {5, 4, 3, 2};    // key pad pinout
@@ -32,7 +36,6 @@ void LCD_INIT()
 
 char Press_keypad()
 {
-  int state = 0 ;
   char key = '0' ;
   char temp = keypad.getKey();
   while (temp == 0)
@@ -43,7 +46,7 @@ char Press_keypad()
 
 volatile int Product[3]  ;
 volatile int Select[3] ;
-void Product_Init(int A = 5 , int B = 5 , int C = 5)
+void Product_Init(int A = DEFAULT_VALUE , int B = DEFAULT_VALUE , int C = DEFAULT_VALUE)
 {
   Product[0] = A ;
   Product[1] = B ;
@@ -81,6 +84,7 @@ int GetState()
     return 0 ; // ERROR
 }
 
+
 int SelectType(char type)
 {
   char temp ;
@@ -94,24 +98,31 @@ int SelectType(char type)
   while (1)
   {
     temp = Press_keypad();
-    if (temp == 'D')
+    if (temp == '#')
     {
       lcd.print(temp) ;
-      delay(300) ;
+      delay(200) ;
       return result ;
+    }
+    if (temp == '*')
+    {
+      lcd.clear() ;
+      lcd.print("Huy") ;
+      delay(400) ;
+      return -1 ;
     }
     if (temp >= '0' and temp <= '9')
     {
       lcd.print(temp) ;
       result = (temp - 48) + result * 10;
-      delay(200) ;
+      delay(100) ;
     }
     else
     {
       lcd.clear();
       lcd.setCursor(1, 1);
       lcd.print("Error. Nhap lai") ;
-      delay(600) ;
+      delay(400) ;
       return SelectType(type) ;
     }
   }
@@ -120,11 +131,18 @@ int SelectType(char type)
 }
 
 
-void Selection()
+bool Selection()
 {
   Select[0] = SelectType('A') ;
+  if (Select[0] == -1)
+    return false ;
   Select[1] = SelectType('B') ;
+  if (Select[1] == -1)
+    return false ;
   Select[2] = SelectType('C') ;
+  if (Select[2] == -1)
+    return false ;
+  return true ;
 }
 
 bool CanPop(int State)
@@ -133,12 +151,22 @@ bool CanPop(int State)
   {
     lcd.clear();
     lcd.print("Nhap san pham") ;
-    delay(500) ;
-    Selection() ;
+    delay(200) ;
+    if (Selection() == false)
+    {
+      return false ;
+    }
     for (int i = 0 ; i < 3 ; i ++)
     {
       if (Product[i] < Select[i])
+      {
+        lcd.clear();
+        lcd.print("Vuot qua so  ") ;
+        lcd.setCursor(0, 1);
+        lcd.print("luong hien co ") ;
+        delay(400) ;
         return false ;
+      }
     }
     return true ;
   }
@@ -146,33 +174,153 @@ bool CanPop(int State)
     return false ;
 }
 
-void SendUart(bool Enable)
+void ReCalculate(bool Enable)
+{
+  for (int i = 0 ; i < 3; i++)
+  {
+    Product[i] = Product[i] - Select[i] ;
+  }
+
+}
+
+void ReceiveUART()
+{
+  memset(buffer, '\0', 160);
+  buffer_point = 0 ;
+  int i = 0 ;
+  while (Serial.available() == 0 && i < 5000)
+  {
+    delay(1) ;
+    i++ ;
+  }
+  while (Serial.available() != 0 )
+  {
+    buffer[buffer_point] = Serial.read() ;
+    buffer_point ++ ;
+    delay(200) ;
+  }
+}
+bool SendUart()
+{
+  for (int i = 0 ; i < 3 ; i ++)
+  {
+    Serial.print(Select[i]) ;
+    ReceiveUART() ;
+    if (buffer_point == 0)
+    {
+      // Loi UART
+      // sang den
+      return false;
+    }
+    memset(buffer, '\0', 160);
+    buffer_point = 0 ;
+  }
+  return true ;
+}
+
+void WaitingForRespone()
+{
+  ReceiveUART();
+  if (strstr(buffer, "OK") != NULL)
+    ReCalculate(true);
+  else
+  {
+    pinMode(A0, OUTPUT) ;
+    digitalWrite(A0, HIGH) ;
+    //Sang den bao hieu .
+  }
+  memset(buffer, '\0', 160);
+  buffer_point = 0 ;
+}
+
+
+
+void Communicate(bool Enable)
 {
   if (Enable == true)
   {
-    for (int i = 0 ; i < 3 ; i ++)
-      Serial.println(Select[i]) ;
-    Serial.println("Confirm") ; 
+    SendUart() ;
+    WaitingForRespone() ;
   }
   else
-  {
     return ;
-  }
 }
+
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);//baudrate 9600
   LCD_INIT() ;
-  delay(1000) ;
+  delay(500) ;
   Product_Init() ;
   DisplayProduct() ;
 }
 
 
+void isPush(int State)
+{
+  if (State == 1)
+  {
+    char  type ;
+    lcd.clear();
+    lcd.print("Nhap loai: ");
+    while (1)
+    {
+      type = Press_keypad() ;
+      if (type == 'A')
+      {
+        lcd.clear();
+        lcd.print("Them loai A...") ;
+        Product_Init(DEFAULT_VALUE, Product[1], Product[2]) ;
+        delay(300) ;
+        return ;
+      }
+      else if (type == 'B')
+      {
+        lcd.clear();
+        lcd.print("Them loai B...") ;
+        Product_Init(Product[0], DEFAULT_VALUE, Product[2]) ;
+        delay(300) ;
+        return ;
+      }
+      else if (type == 'C')
+      {
+        lcd.clear();
+        lcd.print("Them loai C...") ;
+        Product_Init(Product[0],  Product[1],DEFAULT_VALUE) ;
+        delay(300) ;
+        return ;
+      }
+      else if (type == '#')
+      {
+         lcd.clear();
+        lcd.print("Huy") ;
+        delay(300) ; 
+        return ; 
+      }
+      else
+      {
+        lcd.clear();
+        lcd.print("Nhap sai ") ;
+        lcd.setCursor(0, 1);
+        lcd.print("Hay nhap lai") ;
+        delay(300) ; 
+        continue; 
+      }
+    }
+    ReCalculate(true);
+  }
+  else
+    return ;
+}
+
 void loop()
 {
-  DisplayProduct() ;
-  int State = GetState() ;
-  SendUart(CanPop(State)) ; 
+  while (1)
+  {
+    DisplayProduct() ;
+    int State = GetState() ;
+    Communicate(CanPop(State)) ;
+    isPush(State) ; 
+  }
 }
