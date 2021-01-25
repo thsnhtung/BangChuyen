@@ -20,10 +20,10 @@ const int Step2 = 33 ;
 float CountDistance(int trig , int echo);        // Do khoang cach tu ultrasonic
 void ReceiveUART()    ;                        // infinite
 void Active();                                 // Cho nhan gia tri cua uno
-void Run(int Speed, int DirPin, int StepPin);        // stepper motor
+void Run(int Speed);        // stepper motor
 bool isEmpty();                                      // kiem tra xem da chuyen di het san pham hay chua
 bool Check();                                     // check va count
-
+void MainMotor();
 
 void setup() {
   Serial.begin(9600) ;
@@ -48,6 +48,7 @@ void loop()
   if (Check())
   {
     Serial.print("OK") ;
+    MainMotor();
   }
 }
 
@@ -97,7 +98,7 @@ void Active()                                 // Cho nhan gia tri cua uno
 }
 
 
-void Run(int Speed, int DirPin, int StepPin)        // stepper motor
+void Run(int Speed)        // stepper motor
 {
   bool Dir = true ;
   if (Speed < 0)
@@ -105,14 +106,25 @@ void Run(int Speed, int DirPin, int StepPin)        // stepper motor
     Speed = -Speed ;
     Dir = false ;
   }
-  digitalWrite(DirPin, int(Dir) );
+  digitalWrite(Dir, int(Dir) );
+  digitalWrite(Dir1, int(Dir) );
+  digitalWrite(Dir2, int(Dir) );
   for (int x = 0; x < 200; x++)
   {
-    digitalWrite(StepPin, HIGH);
+    digitalWrite(Step, HIGH);
+    digitalWrite(Step1, HIGH);
+    digitalWrite(Step2, HIGH);
     delayMicroseconds(1500 - Speed);
-    digitalWrite(StepPin, LOW);
+    digitalWrite(Step, LOW);
+    digitalWrite(Step1, LOW);
+    digitalWrite(Step2, LOW);
     delayMicroseconds(1500 - Speed);
   }
+}
+
+void MainMotor()
+{
+  //xxxxxxxxxxxxxxxxx
 }
 
 
@@ -120,7 +132,7 @@ bool isEmpty()                                      // kiem tra xem da chuyen di
 {
   for (int i = 0 ; i < 3 ; i ++)
   {
-    if (Transfer[i] != 0)
+    if (Transfer[i] > 0)
       return false ;
   }
   return true ;
@@ -129,29 +141,43 @@ bool isEmpty()                                      // kiem tra xem da chuyen di
 
 bool Check()                                        // check va count
 {
-  int dist = 0  , dist2 = 0 , dist3 = 0 ;
-  int TempDist = 0;
+  int dist = 0  , dist1 = 0 , dist2 = 0 ;
+  int Distance = 0 , Distance1 = 0 , Distance2 = 0 ;
   int i = 0 ;
   while (i < 50000)
   {
-    Run(1000, Dir , Step) ;
-    Run(1000, Dir1 , Step1) ;
-    Run(1000, Dir2 , Step2) ;
-    if (CountDistance(Trig, Echo) < 10)
+    Run(1000) ;
+    Distance  = CountDistance(Trig, Echo);
+    Distance1 = CountDistance(Trig1, Echo1);
+    Distance2 = CountDistance(Trig2, Echo2);
+    if (Distance < 8)
     {
       dist = 1 ;
     }
-    if (CountDistance(Trig1, Echo1) < 10)
+    else if (Distance >= 8 && dist == 1)
+    {
+      Transfer[0]--;
+      dist = 0 ;
+    }
+    if (Distance1 < 8)
+    {
+      dist1 = 1 ;
+    }
+    else if (Distance1 >= 8 && dist1 == 1)
+    {
+      Transfer[1]--;
+      dist1 = 0 ;
+    }
+    if (Distance2 < 8)
+    {
       dist2 = 1 ;
-    if (CountDistance(Trig2, Echo2) < 10)
-      dist3 = 1 ;
-    TempDist =  CountDistance(Trig, Echo) ;
-    if (TempDist >= 10 && dist == 1)
-      Transfer[0] -= 1 ;
-    if (CountDistance(Trig1, Echo1) >= 10 && dist == 1)
-      Transfer[1]-- ;
-    if (CountDistance(Trig1, Echo1) >= 10 && dist == 1)
-      Transfer[2]-- ;
+    }
+    else if (Distance2 >= 8 && dist2 == 1)
+    {
+      Transfer[2]--;
+      dist2 = 0 ;
+    }
+
     if (isEmpty() == true)
     {
       return true ;
