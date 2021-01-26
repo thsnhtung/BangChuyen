@@ -59,7 +59,10 @@ void Run(int Speed);        // stepper motor
 bool isEmpty();
 bool Check(bool Enable);
 void LCD_Count();
-
+void MainMotor()
+{
+  
+}
 
 
 //***************************************************************************//
@@ -95,6 +98,7 @@ void loop()
     int State = GetState() ;
     Check(CanPop(State)) ; 
     Push(State) ;
+    MainMotor() ; 
   }
 }
 
