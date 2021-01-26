@@ -20,8 +20,8 @@ char buffer[160] ;      // Buffer Mem
 volatile int buffer_point = 0 ;
 
 
-byte rowPins[rows] = {5, 4, 3, 2};    // key pad pinout
-byte columnPins[columns] = {6, 7, 8, 9};
+byte rowPins[rows] = {52, 50, 48, 46};    // key pad pinout
+byte columnPins[columns] = {53, 51, 49, 47};
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, columnPins, rows, columns);
 
@@ -29,6 +29,18 @@ Keypad keypad = Keypad(makeKeymap(keys), rowPins, columnPins, rows, columns);
 
 volatile int Product[3]  ;                // So luong san pham
 volatile int Select[3] ;                  // So luong lay ra
+const int Trig = 22 ;                   // Cac chan cua sensor
+const int Echo = 23 ;
+const int Trig1 = 24 ;
+const int Echo1 = 25 ;
+const int Trig2 = 26 ;
+const int Echo2 = 27 ;
+const int Dir = 28 ;
+const int Step = 29 ;
+const int Dir1 = 30 ;
+const int Step1 = 31 ;
+const int Dir2 = 32 ;
+const int Step2 = 33 ;
 
 
 void LCD_INIT() ;
@@ -40,12 +52,14 @@ int SelectType(char type)  ;             // Lua chon loai san pham lay ra
 bool Selection()   ;                       // Lay loai san pham
 bool CanPop(int State);          // Kiem tra xem so luong san pham co du de lay hay khong
 void ReCalculate(bool Enable) ;                // Tinh lai so luong san pham
-void ReceiveUART();                            // inifite
-bool SendUart() ;                             // Gui  uart-- wait for ok mess
-void WaitingForRespone() ;                       // phan hoi tu mega-- nhan ma tin ok nen dem du so luong tu sensor
-void DisplayBill()  ;                          // tinh bill
-void Communicate(bool Enable)  ;                       // giao tiep vs mega
+void DisplayBill(int sum)  ;                          // tinh bill
 void Push(int State)   ;                                   // Check xem co phai lay ra hay khong
+float CountDistance(int trig , int echo);        // Do khoang cach tu ultrasonic
+void Run(int Speed);        // stepper motor
+bool isEmpty();
+bool Check(bool Enable);
+void LCD_Count();
+
 
 
 //***************************************************************************//
@@ -56,6 +70,18 @@ void setup() {
   delay(500) ;
   Product_Init() ;
   DisplayProduct(2) ;
+  pinMode(Trig, OUTPUT);
+  pinMode(Echo, INPUT) ;
+  pinMode(Trig1, OUTPUT);
+  pinMode(Echo1, INPUT) ;
+  pinMode(Trig2, OUTPUT);
+  pinMode(Echo2, INPUT) ;
+  pinMode(Dir, OUTPUT);
+  pinMode(Step, OUTPUT);
+  pinMode(Dir1, OUTPUT);
+  pinMode(Step1, OUTPUT);
+  pinMode(Dir2, OUTPUT);
+  pinMode(Step2, OUTPUT);
 }
 
 //****************************LOOP*******************************//
@@ -67,13 +93,134 @@ void loop()
   {
     DisplayProduct(2) ;
     int State = GetState() ;
-    Communicate(CanPop(State)) ;
+    Check(CanPop(State)) ; 
     Push(State) ;
   }
 }
 
 
 //*****************************************************************************************************************************************************************************************************************//
+
+
+float CountDistance(int trig , int echo)        // Do khoang cach tu ultrasonic
+{
+  digitalWrite(trig, LOW) ;
+  delayMicroseconds(2) ;
+  digitalWrite(trig, HIGH) ;
+  delayMicroseconds(5) ;
+  digitalWrite(trig, LOW) ;
+  return pulseIn(echo, HIGH) / 2 / 29.412;
+}
+
+
+void Run(int Speed)        // stepper motor
+{
+  bool Dir = true ;
+  if (Speed < 0)
+  {
+    Speed = -Speed ;
+    Dir = false ;
+  }
+  digitalWrite(Dir, int(Dir) );
+  digitalWrite(Dir1, int(Dir) );
+  digitalWrite(Dir2, int(Dir) );
+  for (int x = 0; x < 200; x++)
+  {
+    digitalWrite(Step, HIGH);
+    digitalWrite(Step1, HIGH);
+    digitalWrite(Step2, HIGH);
+    delayMicroseconds(1500 - Speed);
+    digitalWrite(Step, LOW);
+    digitalWrite(Step1, LOW);
+    digitalWrite(Step2, LOW);
+    delayMicroseconds(1500 - Speed);
+  }
+}
+
+
+bool isEmpty()                                      // kiem tra xem da chuyen di het san pham hay chua
+{
+  for (int i = 0 ; i < 3 ; i ++)
+  {
+    if (Select[i] > 0)
+      return false ;
+  }
+  return true ;
+}
+
+bool Check(bool Enable)                                        // check va count
+{
+  if (Enable == false)
+    return false ; 
+  ReCalculate(Enable) ; 
+  int dist = 0  , dist1 = 0 , dist2 = 0 ;
+  int Distance = 0 , Distance1 = 0 , Distance2 = 0 ;
+  int i = 0 ;
+  int sum = Select[0] + Select[1] * 2 + Select[2] * 1.5;
+  LCD_Count() ; 
+  while (i < 50000)
+  {
+    Run(1000) ;
+    Distance  = CountDistance(Trig, Echo);
+    Distance1 = CountDistance(Trig1, Echo1);
+    Distance2 = CountDistance(Trig2, Echo2);
+    if (Distance < 8)
+    {
+      dist = 1 ;
+    }
+    else if (Distance >= 8 && dist == 1)
+    {
+      Select[0]--;
+      dist = 0 ;
+    }
+    if (Distance1 < 8)
+    {
+      dist1 = 1 ;
+    }
+    else if (Distance1 >= 8 && dist1 == 1)
+    {
+      Select[1]--;
+      dist1 = 0 ;
+    }
+    if (Distance2 < 8)
+    {
+      dist2 = 1 ;
+    }
+    else if (Distance2 >= 8 && dist2 == 1)
+    {
+      Select[2]--;
+      dist2 = 0 ;
+    }
+    LCD_Count() ; 
+    if (isEmpty() == true)
+    {
+      DisplayBill(sum) ; 
+      return true ;
+    }
+    i++ ;
+  }
+}
+
+void LCD_Count()
+{
+
+  lcd.clear() ;
+  lcd.setCursor(4, 0);
+  lcd.print("Dem san pham") ;
+  lcd.setCursor(3, 1);
+  lcd.print("A:") ;
+  lcd.setCursor(5, 1);
+  lcd.print(Select[0]) ;
+  lcd.setCursor(7, 1);
+  lcd.print("B:") ;
+  lcd.setCursor(9, 1);
+  lcd.print(Select[1]) ;
+  lcd.setCursor(11, 1);
+  lcd.print("C:") ;
+  lcd.setCursor(13, 1);
+  lcd.print(Select[2]) ;
+
+}
 
 void LCD_INIT()
 {
@@ -263,61 +410,11 @@ void ReCalculate(bool Enable)                 // Tinh lai so luong san pham
 }
 
 
-void ReceiveUART()                            // inifite
+
+
+
+void DisplayBill(int sum)                            // tinh bill
 {
-  memset(buffer, '\0', 160);
-  buffer_point = 0 ;
-  while (Serial.available() == 0 );
-  while (Serial.available() != 0 )
-  {
-    buffer[buffer_point] = Serial.read() ;
-    buffer_point ++ ;
-    delay(200) ;
-  }
-}
-
-
-bool SendUart()                              // Gui  uart-- wait for ok mess
-{
-  for (int i = 0 ; i < 3 ; i ++)
-  {
-    Serial.print(Select[i]) ;
-    ReceiveUART() ;
-    if (buffer_point == 0)
-    {
-      // Loi UART
-      // sang den
-      return false;
-    }
-    memset(buffer, '\0', 160);
-    buffer_point = 0 ;
-  }
-  return true ;
-}
-
-
-void WaitingForRespone()                        // phan hoi tu mega-- nhan ma tin ok nen dem du so luong tu sensor
-{
-  ReceiveUART();
-  if (strstr(buffer, "OK") != NULL)
-  {
-    ReCalculate(true);
-    DisplayBill() ;
-  }
-  else
-  {
-    pinMode(A0, OUTPUT) ;
-    digitalWrite(A0, HIGH) ;
-    //Sang den bao hieu .
-  }
-  memset(buffer, '\0', 160);
-  buffer_point = 0 ;
-}
-
-
-void DisplayBill()                            // tinh bill
-{
-  int sum = Select[0] + Select[1] * 2 + Select[2] * 1.5  ;
   lcd.clear() ;
   lcd.print("BILL");
   lcd.setCursor(0, 1) ;
@@ -333,19 +430,6 @@ void DisplayBill()                            // tinh bill
   return ;
 }
 
-
-void Communicate(bool Enable)                         // giao tiep vs mega
-{
-  if (Enable == true)
-  {
-    lcd.clear() ;
-    lcd.print("Processing...");
-    SendUart() ;
-    WaitingForRespone() ;
-  }
-  else
-    return ;
-}
 
 
 void Push(int State)                                      // Check xem co phai lay ra hay khong
