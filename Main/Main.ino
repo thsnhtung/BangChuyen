@@ -41,6 +41,8 @@ const int Dir1 = 30 ;
 const int Step1 = 31 ;
 const int Dir2 = 32 ;
 const int Step2 = 33 ;
+const int DirMain = 34 ;
+const int StepMain = 35 ;
 
 
 void LCD_INIT() ;
@@ -61,7 +63,19 @@ bool Check(bool Enable);
 void LCD_Count();
 void MainMotor()
 {
-  
+  i = 0 ;
+  while( i < 50000)
+  {
+    for (int i = 0 ; i < 200 ; i ++)
+    {
+      digitalWrite(DirMain, HIGH );
+      digitalWrite(StepMain, HIGH);
+      delayMicroseconds(500);
+      digitalWrite(StepMain, LOW);
+      delayMicroseconds(500);    
+    }
+    i ++ ; 
+  }
 }
 
 
@@ -85,6 +99,8 @@ void setup() {
   pinMode(Step1, OUTPUT);
   pinMode(Dir2, OUTPUT);
   pinMode(Step2, OUTPUT);
+  pinMode(DirMain, OUTPUT);
+  pinMode(StepMain, OUTPUT);
 }
 
 //****************************LOOP*******************************//
@@ -117,17 +133,11 @@ float CountDistance(int trig , int echo)        // Do khoang cach tu ultrasonic
 }
 
 
-void Run(int Speed)        // stepper motor
+void Run(int Speed, int a , int b, int c)        // stepper motor
 {
-  bool Dir = true ;
-  if (Speed < 0)
-  {
-    Speed = -Speed ;
-    Dir = false ;
-  }
-  digitalWrite(Dir, int(Dir) );
-  digitalWrite(Dir1, int(Dir) );
-  digitalWrite(Dir2, int(Dir) );
+  digitalWrite(Dir, a );
+  digitalWrite(Dir1, b );
+  digitalWrite(Dir2, c );
   for (int x = 0; x < 200; x++)
   {
     digitalWrite(Step, HIGH);
@@ -158,13 +168,14 @@ bool Check(bool Enable)                                        // check va count
     return false ; 
   ReCalculate(Enable) ; 
   int dist = 0  , dist1 = 0 , dist2 = 0 ;
+  int a = 1 , b = 1 , c = 1; 
   int Distance = 0 , Distance1 = 0 , Distance2 = 0 ;
   int i = 0 ;
   int sum = Select[0] + Select[1] * 2 + Select[2] * 1.5;
   LCD_Count() ; 
   while (i < 50000)
   {
-    Run(1000) ;
+    Run(1000,a ,b ,c) ;
     Distance  = CountDistance(Trig, Echo);
     Distance1 = CountDistance(Trig1, Echo1);
     Distance2 = CountDistance(Trig2, Echo2);
@@ -196,9 +207,20 @@ bool Check(bool Enable)                                        // check va count
       dist2 = 0 ;
     }
     LCD_Count() ; 
-    if (isEmpty() == true)
+    if (Select[0] <=0)
     {
-      DisplayBill(sum) ; 
+      a = 0 ; 
+    }
+    if (Select[1] <=0)
+    {
+      b = 0 ; 
+    }
+    if (Select[2] <=0)
+    {
+      c = 0 ; 
+    }
+    if (Select[0] <= 0 && Select[1] <= 0  && Select[2] <= 0)
+    {
       return true ;
     }
     i++ ;
